@@ -1,6 +1,6 @@
 This repository includes some of the projects conducted during udacity data analyst nanodegree course.
 
-## 1. exploratry-data-analysis
+## 1. exploratory-data-analysis
 * revised-EDAproject.Rmd: 
   Exploratory Data Analysis project on Prosper Loan Data, using R.
 * investigate-tmdb-movie-dataset.ipynb: 
