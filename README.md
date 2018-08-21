@@ -6,7 +6,7 @@ This repository includes some of the projects conducted during udacity data anal
 * investigate-tmdb-movie-dataset.ipynb: 
   Exploratory Data Analysis project on TMDb Movie Dataset, using python, numpy, pandas, and matplotlib.
 
-## 2. Data gathering and wrangling
+## 2. data-wrangilng
 * wrangle_act.ipynb: Data gatherring and wrangling project on WeRateDogs dataset, using python, numpy, pandas, matplotlib, and tweepy.
 
-## 3. Visualization
+## 3. visualization
