@@ -10,3 +10,4 @@ This repository includes some of the projects conducted during udacity data anal
 * wrangle_act.ipynb: Data gatherring and wrangling project on WeRateDogs dataset, using python, numpy, pandas, matplotlib, and tweepy.
 
 ## 3. visualization
+* flight-data-2008.md: Data story telling project on US flight data 2008, using Tableau.
