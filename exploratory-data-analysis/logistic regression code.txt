@@ -1,0 +1,18 @@
+### add new variable Defaulted by converting IsDefaulted to boolean
+loandata_completed$Defaulted <- ifelse(
+  loandata_completed$LoanStatus == 'Defaulted' | 
+    loandata_completed$LoanStatus == 'Chargedoff', TRUE,
+  FALSE)
+
+### Split the data into train and test dataset.
+
+print(dim(loandata_completed)[1]/2)
+
+half <- dim(loandata_completed)[1]/2
+train <- loandata_completed[1:dim(loandata_completed)[1]/2,]
+test <- loandata_completed[dim(loandata_completed)[1]/2+1:dim(loandata_completed)[1],]
+
+dim(train)
+dim(test)
+
+model <- glm(Defaulted~.,family=binomial(link='logit'),data=train)

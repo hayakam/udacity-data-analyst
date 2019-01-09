@@ -26,6 +26,7 @@ Prosper Loan Data Exploration by Masa Hayakawa
 #install.packages('memisc')
 #install.packages('lubridate')
 #install.packages('gridExtra')
+#install.packages("Amelia")
 
 library(ggplot2)
 library(data.table)
@@ -37,14 +38,14 @@ library(MASS)
 library(lattice)
 library(lubridate)
 library(gridExtra)
-
+library(Amelia)
 ```
 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, Load_the_Data}
 
 # Load the Data
-pf <- read.csv('data/prosperLoanData.csv')
+pf <- read.csv('~/Downloads/Udacity/data/prosperLoanData.csv',na.strings=c(""))
 
 ### only pick up relevant fields and also filtering out records with missing loan status and cancelled status.
 
@@ -67,8 +68,20 @@ loandata_completed$IsDefaulted <- ifelse(
 
 ```
 
+
 This report explores Prosper Loan dataset that contain loan information for 
 approximately 114,000 loan records.
+
+# Data Wrangling Section
+
+Before exploring analysis, I would like to deal with any missing values.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+### Check if three are any missing values
+missmap(loandata_completed, main = "Missing values vs observed")
+
+```
+Above chart is showing there are some missing values with ProsperRating..numeric, ProsperRating..Alpha, ProsperScore, and DebtToIncomeRatio, and EmploymentStatus.
 
 # Univariate Plots Section
 
@@ -101,6 +114,7 @@ Summary of each variables are as follows:
 summary(loandata_completed)
 
 ```
+
 
 Now, I would like to look into the dataset. Firstly, I would like to explore some of the univariate plots.
 
@@ -873,4 +887,35 @@ Seemingly, defaulted/charge-off loans are distributed more in lower ratings such
 * If I could have some more details about this dataset, especially the factors that determine ratings and scores, it might have been possible to find the features that strengthened each other, that possibly help to make such prediction.
 
 
+### Extra: Logistic Regression
 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_Three}
+
+### add new variable Defaulted by converting IsDefaulted to boolean
+loandata_completed$Defaulted <- ifelse(
+  loandata_completed$LoanStatus == 'Defaulted' | 
+    loandata_completed$LoanStatus == 'Chargedoff', TRUE,
+  FALSE)
+
+### Split the data into train and test dataset.
+
+dim(loandata_completed)[1]/2
+
+### test with smaller data first, as full data seems to be too heavy for mac book air
+
+train <- loandata_completed[1:1000,]
+test <- loandata_completed[1001:2000,]
+
+#train <- loandata_completed[1:dim(loandata_completed)[1]/2,]
+#test <- loandata_completed[dim(loandata_completed)[1]/2+1:dim(loandata_completed)[1],]
+
+dim(train)
+dim(test)
+
+model <- glm(Defaulted~.,family=binomial(link='logit'),data=train)
+
+### obtain the result
+summary(model)
+
+```
