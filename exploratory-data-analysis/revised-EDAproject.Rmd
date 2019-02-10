@@ -19,7 +19,7 @@ Prosper Loan Data Exploration by Masa Hayakawa
 # for other code chunks once you have verified that each plot comes out as you
 # want it to. This will clean up the flow of your report.
 
-#install.packages('ggplot2')
+#install.packages('ggplot2',dependencies = TRUE)
 #install.packages('data.table')
 #install.packages('dplyr')
 #install.packages('GGally')
@@ -27,6 +27,9 @@ Prosper Loan Data Exploration by Masa Hayakawa
 #install.packages('lubridate')
 #install.packages('gridExtra')
 #install.packages("Amelia")
+#install.packages("pscl")
+#install.packages("ROCR")
+#install.packages("caret")
 
 library(ggplot2)
 library(data.table)
@@ -39,6 +42,10 @@ library(lattice)
 library(lubridate)
 library(gridExtra)
 library(Amelia)
+library(pscl)
+library(ROCR)
+library(caret)
+
 ```
 
 
@@ -56,15 +63,19 @@ loandata <- subset(pf, pf$LoanStatus != 'Cancelled' & !is.na(pf$LoanStatus),
                               LoanStatus, EmploymentStatus, IsBorrowerHomeowner,
                               ProsperRating..Alpha., LoanOriginationDate,
                               ListingCategory..numeric., Term, 
-                              ProsperRating..numeric.))
+                              ProsperRating..numeric., EmploymentStatusDuration, CurrentCreditLines, OpenRevolvingAccounts, OpenRevolvingMonthlyPayment,
+                              TotalInquiries, 
+                              CurrentDelinquencies,
+                              RevolvingCreditBalance, BankcardUtilization, AvailableBankcardCredit, IncomeVerifiable,CreditScoreRangeLower
+                              ))
 
-loandata_completed <- subset(loandata, loandata$LoanStatus %in% c('Completed','Chargedoff','Defaulted'))
+### binning LoanOriginalAmount and StatedMonthlyIncome to avoid perfect separation warning
+Amount_Ranges <- c("$0 - $999", "$1,000 - $1,999","$2,000 - $2,999", "$3,000 - $3,999", "$4,000 - $4,999", "$5,000 - $5,999", "$6,000 - $6,999", "$7,000 - $7,999", "$8,000 - $8,999", "$9,000 - $9,999", "$10,000 - $10,999", "$11,000 - $11,999", "$12,000 - $12,999", "$13,000 - $13,999", "$14,000 - $14,999", "$15,000 - $15,999", "$16,000 - $16,999","$17,000 - $17,999","$18,000 - $19,999", "$20,000 or more")
 
-### adding new variables
-loandata_completed$IsDefaulted <- ifelse(
-  loandata_completed$LoanStatus == 'Defaulted' | 
-    loandata_completed$LoanStatus == 'Chargedoff', 'Defaulted/Charge-off',
-  'Completed')
+
+loandata$LoanOriginalAmountRange <- cut(loandata$LoanOriginalAmount, c(-Inf, seq(2000,20000,1000), Inf), labels=Amount_Ranges, right=F)
+
+loandata$StatedMonthlyIncomeRange <- cut(loandata$StatedMonthlyIncome, c(-Inf, seq(2000,20000,1000), Inf), labels=Amount_Ranges, right=F)
 
 ```
 
@@ -78,9 +89,10 @@ Before exploring analysis, I would like to deal with any missing values.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 ### Check if three are any missing values
-missmap(loandata_completed, main = "Missing values vs observed")
+missmap(loandata, main = "Missing values vs observed")
 
 ```
+
 Above chart is showing there are some missing values with ProsperRating..numeric, ProsperRating..Alpha, ProsperScore, and DebtToIncomeRatio, and EmploymentStatus.
 
 # Univariate Plots Section
@@ -93,7 +105,43 @@ I have created a subset from original data so that I can only focus on already c
 Thus, the dataset in this report includes 55,084 observations with 16 variables as follows.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, Univariate_Plots}
+loandata_completed <- subset(loandata, loandata$LoanStatus %in% c('Completed','Chargedoff','Defaulted'))
 
+### adding new variables
+
+# IsDefaulted: to be used to indicate whether or not the loan is either Completed or Chargedoff/Defaulted
+loandata_completed$IsDefaulted <- ifelse(
+  loandata_completed$LoanStatus == 'Defaulted' | 
+    loandata_completed$LoanStatus == 'Chargedoff', 'Defaulted/Charge-off',
+  'Completed')
+
+loandata_completed$MonthlyIncomePaymentDiff <- ifelse(loandata_completed$StatedMonthlyIncome==0,0, (loandata_completed$StatedMonthlyIncome - loandata_completed$MonthlyLoanPayment)/loandata_completed$StatedMonthlyIncome)
+
+### Replace NA in loandta_completed
+loandata_completed$DebtToIncomeRatio <- ifelse(is.na(loandata_completed$DebtToIncomeRatio),0,loandata_completed$DebtToIncomeRatio)
+
+loandata_completed$ProsperScore <- ifelse(is.na(loandata_completed$ProsperScore),0,loandata_completed$ProsperScore)
+
+loandata_completed$ProsperRating..Alpha. <- ifelse(is.na(loandata_completed$ProsperRating..Alpha.),'NA',as.character(loandata_completed$ProsperRating..Alpha.))
+
+loandata_completed$EmploymentStatusDuration <- ifelse(is.na(loandata_completed$EmploymentStatusDuration),0,loandata_completed$EmploymentStatusDuration)
+
+loandata_completed$CurrentCreditLines <- ifelse(is.na(loandata_completed$CurrentCreditLines),0,loandata_completed$CurrentCreditLines)
+
+loandata_completed$BankcardUtilization <- ifelse(is.na(loandata_completed$BankcardUtilization),0,loandata_completed$BankcardUtilization)
+
+loandata_completed$RevolvingCreditBalance <- ifelse(is.na(loandata_completed$RevolvingCreditBalance),0,loandata_completed$RevolvingCreditBalance)
+
+loandata_completed$AvailableBankcardCredit <- ifelse(is.na(loandata_completed$AvailableBankcardCredit),0,loandata_completed$AvailableBankcardCredit)
+
+loandata_completed$TotalInquiries <- ifelse(is.na(loandata_completed$TotalInquiries),0,loandata_completed$TotalInquiries)
+
+loandata_completed$CurrentDelinquencies <- ifelse(is.na(loandata_completed$CurrentDelinquencies),0,loandata_completed$CurrentDelinquencies)
+
+loandata_completed$CreditScoreRangeLower <- ifelse(is.na(loandata_completed$CreditScoreRangeLower),0,loandata_completed$CreditScoreRangeLower)
+
+unique(loandata_completed$CreditScoreRangeLower)
+#mean(is.na(loandata_completed$DebtToIncomeRatio))                 
 dim(loandata_completed)
 
 ```
@@ -869,7 +917,7 @@ ggplot(aes(x = ProsperRating..Alpha.  , y = ProsperScore,
 
 ### Description Three
 
-Seemingly, defaulted/charge-off loans are distributed more in lower ratings such as D, E, and HR. However, defaulted loans still can be seen even with higher ratings.
+Seemingly, defaulted/charge-off loans are distributed more in lower ratings such as D, E, and HR. However, defaulted loans still can be seen even with higher ratings like AA or A.
 
 
 
@@ -882,40 +930,239 @@ Seemingly, defaulted/charge-off loans are distributed more in lower ratings such
 
 #### Future work: 
 
-* In this report, analysis was conducted for closed loans aiming to find any patterns and any factors that affect whether or not a loan could go default.
+* In this report, analysis was conducted for closed loans aiming to find any patterns and any factors that may affect whether or not a loan could go default.
 * As a future work, I am interested in making any prediction on how much portion of current loans could go default.
 * If I could have some more details about this dataset, especially the factors that determine ratings and scores, it might have been possible to find the features that strengthened each other, that possibly help to make such prediction.
 
 
-### Extra: Logistic Regression
+# Extra: Logistic Regression
 
+After completed the Udacity nanodegree course, revisited this dataset with attempt to establish a logistic regression model.
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_Three}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+### prepare a sample dataset
+set.seed(20022012)
 
 ### add new variable Defaulted by converting IsDefaulted to boolean
+
 loandata_completed$Defaulted <- ifelse(
   loandata_completed$LoanStatus == 'Defaulted' | 
     loandata_completed$LoanStatus == 'Chargedoff', TRUE,
   FALSE)
 
-### Split the data into train and test dataset.
+loandata_completed_train<- subset(
+  loandata_completed,
+  select = c(LoanOriginalAmountRange, 
+             BorrowerRate,
+             StatedMonthlyIncomeRange,
+             DebtToIncomeRatio, 
+             MonthlyLoanPayment,
+             ProsperScore,
+             ProsperRating..Alpha.,
+             CurrentCreditLines,
+             EmploymentStatusDuration,
+             OpenRevolvingAccounts, 
+             OpenRevolvingMonthlyPayment,
+             BankcardUtilization,
+             RevolvingCreditBalance,
+             AvailableBankcardCredit,
+             TotalInquiries,
+             CurrentDelinquencies,
+             Term,
+             IncomeVerifiable,
+             CreditScoreRangeLower,
+             Defaulted
+             ))
 
-dim(loandata_completed)[1]/2
-
-### test with smaller data first, as full data seems to be too heavy for mac book air
-
-train <- loandata_completed[1:1000,]
-test <- loandata_completed[1001:2000,]
-
-#train <- loandata_completed[1:dim(loandata_completed)[1]/2,]
-#test <- loandata_completed[dim(loandata_completed)[1]/2+1:dim(loandata_completed)[1],]
-
-dim(train)
-dim(test)
-
-model <- glm(Defaulted~.,family=binomial(link='logit'),data=train)
-
-### obtain the result
-summary(model)
+###split data in to train and test dataset
+library(caTools)
+set.seed(144)
+spl = sample.split(loandata_completed_train$Defaulted, 0.7)
+train_set = subset(loandata_completed_train, spl == TRUE)
+test_set = subset(loandata_completed_train, spl == FALSE)
 
 ```
+
+```{r}
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+### fitting
+#model <- glm(Defaulted~.,family=binomial(link='logit'),data=loandata_completed_train)
+model <- glm(Defaulted~.,family=binomial(link='logit'),data=train_set)
+
+```
+### Interpretation
+
+```{r echo=FALSE, message=FALSE, Interpretation}
+summary(model)
+
+### analyze table of deviance
+anova(model, test="Chisq")
+
+```
+
+From the results:
+* BorrowerRate and StatedMonthlyIncome have the lowest p-value of 2e-16. This suggests strong association of between these two variables and the probability of the loan to go default.
+* EmploymentStatusDuration, IncomeVerifiable, and RevolvingCreditBalance have less correlation.
+
+```{r}
+```
+Memo: 
+* When running anova(), first attempt caused perfect separation warning and LoanOriginalAmount seems to be responsible for this warning.
+* Applied binning on LoanOriginalAmount, but still throwing the warning. StatedMonthlyIncome also seems to be causing this warning.
+* After binning both LoanOriginalAmount and StatedMonthlyIncome, the warning is no longer thrown. 
+
+
+### Assessing the predictive ability of the model
+
+```{r}
+### predict
+fitted.results <- predict(model,newdata=test_set,type='response')
+```
+
+```{r}
+### examine accuracy
+threshold = 0.5
+
+fitted.results <- ifelse(fitted.results > threshold,1,0)
+misClasificError <- mean(fitted.results != test_set$Defaulted)
+
+print(paste("Misclacific err::",misClasificError))
+print(paste('Accuracy',1-misClasificError))
+
+# compute McFadden R2
+
+print("R2: ")
+pR2(model)
+
+
+### Confusion Matrix
+confusion_matrix <- table(test_set$Defaulted, as.numeric(fitted.results >= threshold))
+
+cat("\n")
+print("Confusion Matrix: ")
+confusion_matrix
+
+tn <- confusion_matrix[1]
+fn <- confusion_matrix[2]
+fp <- confusion_matrix[3]
+tp <- confusion_matrix[4]
+
+cat("\n")
+
+print(paste('True Negative: ',tn))
+print(paste('False Negative: ',fn))
+print(paste('False Positive: ',fp))
+print(paste('True Positive: ',tp))
+
+print(paste('Recall: ', tp/(tp + fn)))
+print(paste('Precision: ',tp/(tp + fp)))
+
+# accuracy based on above confusion matrix
+print(paste('Accuracy:', (tn + tp)/sum(confusion_matrix)))
+
+```
+
+We got accuracy of 72.4%
+Let's examine the accuracy by conducting coross validation.
+
+### Cross Validation
+```{r}
+
+predictors_vector <- c("BorrowerRate", "DebtToIncomeRatio","LoanOriginalAmountRange","StatedMonthlyIncomeRange","MonthlyLoanPayment",
+"ProsperScore","ProsperRating..Alpha.",
+"CurrentCreditLines","EmploymentStatusDuration","Term",
+"BankcardUtilization","RevolvingCreditBalance","AvailableBankcardCredit","TotalInquiries","CurrentDelinquencies"
+)
+
+predictors_vector_sum <- paste(predictors_vector, collapse="+")
+logReg_model_fmla <- as.formula(paste("Defaulted ~ ", predictors_vector_sum))
+
+fitControl = trainControl( method = "cv", number = 10, p = 0.70 )
+
+### Convert `Defaulted` column from boolean to factor
+#train_set$Defaulted <-as.integer(as.logical(train_set$Defaulted))
+train_set$Defaulted <-as.factor(as.logical(train_set$Defaulted))
+
+logReg_model_cv <- train(logReg_model_fmla, data=train_set, method = "bayesglm", trControl = fitControl)
+
+logReg_model_cv$resample$Accuracy
+mean(logReg_model_cv$resample$Accuracy)
+```
+
+Above cross validation results seem to match the predicted accuracy of 72.4%.
+
+### ROC and AUC
+```{r}
+
+p <- predict(model, newdata=test_set, type="response")
+pr <- prediction(p, test_set$Defaulted)
+
+# Performance function
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+
+# Plot ROC curve
+plot(prf,colorize=TRUE,print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+grid()
+
+# AUC
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+print(paste("AUC:", auc))
+
+# Recall-Precision curve
+prf <- performance(pr, measure = "prec", x.measure = "rec")
+plot (prf);
+
+# F1 score
+prf <- performance(pr, "f")
+plot (prf);
+```
+
+
+### Optimization
+We have used threshold of 0.5 in previous analysis and we succeeded in identifying 1,540 true positives, but still missing 3,563 false positives.
+
+Let's see if changing threshold improve the prediction ability.
+
+```{r}
+fitted.results <- predict(model,newdata=test_set,type='response')
+
+thresholds <- seq(0.1,1.0,by=0.05)
+
+for(threshold in thresholds){
+  results.over.threshold <- ifelse(fitted.results > threshold,1,0)
+  misClasificError <- mean(results.over.threshold != test_set$Defaulted)
+  mean(results.over.threshold)
+
+  confusion_matrix <- table(test_set$Defaulted, as.numeric(results.over.threshold >= threshold))
+
+  print(paste('Threshold: ',threshold))
+  print(confusion_matrix)
+
+  print(misClasificError)
+  print(paste('Accuracy',1-misClasificError))
+  
+  tn <- confusion_matrix[1]
+  fn <- confusion_matrix[2]
+  fp <- confusion_matrix[3]
+  tp <- confusion_matrix[4]
+  
+  print(paste('False Negative: ',fn))
+  print(paste('True Positive: ',tp))
+  
+  recall <- tp/(tp + fn)
+  precision <- tp/(tp + fp)
+  f1 <- 2* precision * recall /(precision + recall)
+  print(paste('Recall: ', recall))
+  
+  print(paste('Precision: ',precision))
+  print(paste('F1: ',f1))
+  cat("\n")
+  }
+```
+
+Threshold of 0.4 seems to score most balanced result, we have F1 score of 0.51 that is closest to 0.5, precision higher than 0.5, and also accuracy higher than 71%.
+
